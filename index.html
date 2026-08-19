@@ -150,7 +150,7 @@
                 <a href="#" class="flex items-center gap-3 group">
                     <div class="relative w-12 h-12 shrink-0 transition-transform group-hover:scale-105">
                         <img id="siteLogoImage" src="" alt="Going Up! Mandarin Course Bali Logo" class="w-full h-full object-contain">
-                        <button onclick="event.preventDefault(); changeImageUrl('siteLogoImage', 'Site Logo Image URL')" class="admin-only hidden absolute -bottom-1 -right-1 bg-blue-600 text-white p-1 rounded-full text-[9px] shadow-lg hover:bg-blue-700">
+                        <button onclick="event.preventDefault(); openLogoImagePicker()" class="admin-only hidden absolute -bottom-1 -right-1 bg-blue-600 text-white p-1 rounded-full text-[9px] shadow-lg hover:bg-blue-700">
                             <i class="fa-solid fa-image"></i>
                         </button>
                     </div>
@@ -272,7 +272,7 @@
                                 </div>
 
                                 <!-- Admin Change Image Button -->
-                                <button onclick="changeImageUrl('heroImage', 'Hero Card Image URL')" class="admin-only hidden absolute top-4 right-4 bg-blue-600 text-white p-2 rounded-lg text-xs font-bold shadow-lg hover:bg-blue-700">
+                                <button onclick="openHeroImagePicker()" class="admin-only hidden absolute top-4 right-4 bg-blue-600 text-white p-2 rounded-lg text-xs font-bold shadow-lg hover:bg-blue-700">
                                     <i class="fa-solid fa-image"></i> Change Image
                                 </button>
                             </div>
@@ -293,7 +293,7 @@
                             <div class="aspect-[3/4] rounded-xl overflow-hidden shadow-xl border border-brand-sand">
                                 <img id="aboutImage" src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&q=80&w=800" alt="Students writing Chinese characters" class="w-full h-full object-cover">
                             </div>
-                            <button onclick="changeImageUrl('aboutImage', 'About Image URL')" class="admin-only hidden absolute top-4 right-4 bg-blue-600 text-white p-2 rounded-lg text-xs font-bold shadow-lg hover:bg-blue-700">
+                            <button onclick="openAboutImagePicker()" class="admin-only hidden absolute top-4 right-4 bg-blue-600 text-white p-2 rounded-lg text-xs font-bold shadow-lg hover:bg-blue-700">
                                 <i class="fa-solid fa-image"></i> Change Image
                             </button>
                         </div>
@@ -435,7 +435,7 @@
                         Warm, passionate, certified educators who bring Mandarin to life with patience and expertise.
                     </p>
                     <div class="admin-only hidden pt-2">
-                        <button onclick="addNewTeacher()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow hover:bg-emerald-700">
+                        <button onclick="openTeacherModal()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow hover:bg-emerald-700">
                             <i class="fa-solid fa-plus mr-1"></i> Add Teacher Profile
                         </button>
                     </div>
@@ -784,6 +784,125 @@
                 </div>
                 <button onclick="closeModal('lightboxModal')" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold transition-colors">Close Viewer</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 5b. GENERIC IMAGE PICKER MODAL (Upload from Computer or Google Drive / URL) -->
+    <div id="imagePickerModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+        <div class="bg-gray-900 text-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative border border-gray-800 space-y-5">
+            <button onclick="closeModal('imagePickerModal')" class="absolute top-4 right-4 text-gray-400 hover:text-white text-lg">✕</button>
+
+            <div class="space-y-1">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">Image</span>
+                <h3 id="imagePickerModalTitle" class="text-2xl font-bold">Change Image</h3>
+                <p class="text-xs text-gray-400">Upload directly from your computer or paste a Google Drive / direct image URL.</p>
+            </div>
+
+            <form onsubmit="handleImagePickerSave(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-1.5">Source Option</label>
+                    <div class="flex items-center gap-4 text-xs">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="imagePickerSourceType" value="computer" checked onchange="toggleImagePickerSourceType('computer')" class="text-blue-600 focus:ring-blue-500">
+                            <span>Upload from Computer</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="imagePickerSourceType" value="url" onchange="toggleImagePickerSourceType('url')" class="text-blue-600 focus:ring-blue-500">
+                            <span>Google Drive / URL Link</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="imagePickerComputerBox" class="space-y-2">
+                    <div class="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-xl p-6 text-center bg-gray-950 cursor-pointer transition-colors relative" onclick="document.getElementById('imagePickerFileInput').click()">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-blue-400 mb-2 block"></i>
+                        <span id="imagePickerBoxLabel" class="text-xs text-gray-300 block font-semibold">Click to browse or drag an image here</span>
+                        <span class="text-[10px] text-gray-500 block mt-1">Supports JPG, PNG, WEBP</span>
+                        <input id="imagePickerFileInput" type="file" accept="image/*" onchange="handleImagePickerFileSelect(event)" class="hidden">
+                    </div>
+                </div>
+
+                <div id="imagePickerUrlBox" class="hidden space-y-1.5">
+                    <label class="block text-xs font-bold text-gray-300">Google Drive or Direct Image URL</label>
+                    <input id="imagePickerUrlInput" type="url" placeholder="https://drive.google.com/file/d/... or direct image link" class="w-full px-4 py-3 rounded-xl border border-gray-800 bg-gray-950 text-white text-xs focus:outline-none focus:border-blue-500">
+                    <p class="text-[10px] text-gray-500 leading-normal">Google Drive: make sure link sharing is set to "Anyone with the link".</p>
+                </div>
+
+                <div id="imagePickerPreviewContainer" class="hidden space-y-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Preview</span>
+                    <div class="aspect-video rounded-xl overflow-hidden bg-black border border-gray-800">
+                        <img id="imagePickerPreviewImg" class="w-full h-full object-cover" src="" alt="Preview">
+                    </div>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeModal('imagePickerModal')" class="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 transition-colors">Cancel</button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition-colors shadow-lg">Save Image</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 5c. TEACHER PROFILE MODAL (Add / Edit, with photo upload from Computer or Google Drive / URL) -->
+    <div id="teacherModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+        <div class="bg-gray-900 text-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative border border-gray-800 space-y-5 max-h-[90vh] overflow-y-auto">
+            <button onclick="closeModal('teacherModal')" class="absolute top-4 right-4 text-gray-400 hover:text-white text-lg">✕</button>
+
+            <div class="space-y-1">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-purple-400">Teacher Profile</span>
+                <h3 id="teacherModalTitle" class="text-2xl font-bold">Add Teacher</h3>
+            </div>
+
+            <form onsubmit="handleTeacherSave(event)" class="space-y-4 text-xs">
+                <input type="hidden" id="teacherEditId" value="">
+
+                <div>
+                    <label class="block font-bold uppercase tracking-wider text-gray-300 mb-1.5">Photo</label>
+                    <div class="flex items-center gap-4 mb-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="teacherPhotoSourceType" value="computer" checked onchange="toggleTeacherPhotoSourceType('computer')" class="text-purple-600 focus:ring-purple-500">
+                            <span>Upload from Computer</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="teacherPhotoSourceType" value="url" onchange="toggleTeacherPhotoSourceType('url')" class="text-purple-600 focus:ring-purple-500">
+                            <span>Google Drive / URL</span>
+                        </label>
+                    </div>
+                    <div id="teacherPhotoComputerBox" class="border-2 border-dashed border-gray-700 hover:border-purple-500 rounded-xl p-4 text-center bg-gray-950 cursor-pointer transition-colors" onclick="document.getElementById('teacherPhotoFileInput').click()">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl text-purple-400 mb-1 block"></i>
+                        <span id="teacherPhotoBoxLabel" class="text-[11px] text-gray-300 block font-semibold">Click to browse or drag a photo here</span>
+                        <input id="teacherPhotoFileInput" type="file" accept="image/*" onchange="handleTeacherPhotoFileSelect(event)" class="hidden">
+                    </div>
+                    <input id="teacherPhotoUrlInput" type="url" placeholder="https://drive.google.com/file/d/... or direct image link" class="hidden w-full px-4 py-3 rounded-xl border border-gray-800 bg-gray-950 text-white text-xs focus:outline-none focus:border-purple-500 mt-2">
+                    <div id="teacherPhotoPreviewContainer" class="hidden mt-2">
+                        <div class="w-28 aspect-[4/3] rounded-lg overflow-hidden bg-black border border-gray-800">
+                            <img id="teacherPhotoPreviewImg" class="w-full h-full object-cover" src="" alt="Preview">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-gray-300 mb-1">Full Name</label>
+                    <input id="teacherNameInput" type="text" required placeholder="e.g. Lin Laoshi" class="w-full px-3 py-2.5 rounded-lg border border-gray-800 bg-gray-950 text-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-300 mb-1">Role Badge</label>
+                    <input id="teacherBadgeInput" type="text" required placeholder="e.g. Head Teacher" class="w-full px-3 py-2.5 rounded-lg border border-gray-800 bg-gray-950 text-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-300 mb-1">Subtitle</label>
+                    <input id="teacherSubInput" type="text" placeholder="e.g. Native Speaker · 8+ Yrs Experience" class="w-full px-3 py-2.5 rounded-lg border border-gray-800 bg-gray-950 text-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-300 mb-1">Bio</label>
+                    <textarea id="teacherBioInput" rows="3" placeholder="Short teacher bio..." class="w-full px-3 py-2.5 rounded-lg border border-gray-800 bg-gray-950 text-white"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeModal('teacherModal')" class="px-4 py-2 bg-gray-800 rounded-lg text-gray-300 font-bold">Cancel</button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition-colors shadow-lg">Save Teacher</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1218,7 +1337,7 @@
                 <div class="bg-brand-ivory rounded-2xl overflow-hidden border border-brand-sand shadow-sm relative group">
                     ${isAdminActive ? `
                         <div class="absolute top-3 right-3 flex gap-1 z-10">
-                            <button onclick="editTeacherItem('${t.id}')" class="p-1.5 rounded bg-blue-600 text-white text-[10px]"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="openTeacherModal('${t.id}')" class="p-1.5 rounded bg-blue-600 text-white text-[10px]"><i class="fa-solid fa-pen"></i></button>
                             <button onclick="deleteTeacherItem('${t.id}')" class="p-1.5 rounded bg-rose-600 text-white text-[10px]"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     ` : ''}
@@ -1663,19 +1782,108 @@
             }
         }
 
-        function changeImageUrl(elementId, promptTitle) {
-            const currentUrl = document.getElementById(elementId).src;
-            const newUrl = prompt(`Enter new image URL for ${promptTitle}:`, currentUrl);
-            if (newUrl && newUrl.trim() !== '') {
-                document.getElementById(elementId).src = newUrl.trim();
-                if (elementId === 'heroImage') siteData.heroImage = newUrl.trim();
-                if (elementId === 'aboutImage') siteData.aboutImage = newUrl.trim();
-                if (elementId === 'siteLogoImage') {
-                    siteData.logoImage = newUrl.trim();
-                    document.getElementById('siteLogoImageFooter').src = newUrl.trim();
+        // ============================================================
+        // Generic Image Picker — lets any single-image field ("logo",
+        // "hero", "about", etc.) be set either by uploading a file from
+        // the computer (stored as a data URL) or by pasting a Google
+        // Drive / direct image URL. Reused by openLogoImagePicker(),
+        // openHeroImagePicker(), openAboutImagePicker(), and the Teacher
+        // Profile modal has its own copy of this same pattern.
+        // ============================================================
+        let pendingImagePickerDataUrl = '';
+        let activeImagePickerTarget = null; // { title, onSave(url) }
+
+        function openImagePicker(target) {
+            activeImagePickerTarget = target;
+            pendingImagePickerDataUrl = '';
+            document.getElementById('imagePickerModalTitle').textContent = target.title || 'Change Image';
+            document.getElementById('imagePickerUrlInput').value = '';
+            document.getElementById('imagePickerPreviewContainer').classList.add('hidden');
+            document.getElementById('imagePickerBoxLabel').textContent = 'Click to browse or drag an image here';
+            document.getElementById('imagePickerFileInput').value = '';
+            toggleImagePickerSourceType('computer');
+            openModal('imagePickerModal');
+        }
+
+        function openLogoImagePicker() {
+            openImagePicker({
+                title: 'Site Logo Image',
+                onSave: (url) => {
+                    siteData.logoImage = url;
+                    document.getElementById('siteLogoImage').src = url;
+                    document.getElementById('siteLogoImageFooter').src = url;
+                    saveAdminChanges();
                 }
-                saveAdminChanges();
+            });
+        }
+
+        function openHeroImagePicker() {
+            openImagePicker({
+                title: 'Hero Card Image',
+                onSave: (url) => {
+                    siteData.heroImage = url;
+                    document.getElementById('heroImage').src = url;
+                    saveAdminChanges();
+                }
+            });
+        }
+
+        function openAboutImagePicker() {
+            openImagePicker({
+                title: 'About Section Image',
+                onSave: (url) => {
+                    siteData.aboutImage = url;
+                    document.getElementById('aboutImage').src = url;
+                    saveAdminChanges();
+                }
+            });
+        }
+
+        function toggleImagePickerSourceType(source) {
+            const radios = document.getElementsByName('imagePickerSourceType');
+            radios.forEach(r => r.checked = (r.value === source));
+            document.getElementById('imagePickerComputerBox').classList.toggle('hidden', source !== 'computer');
+            document.getElementById('imagePickerUrlBox').classList.toggle('hidden', source !== 'url');
+        }
+
+        function handleImagePickerFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                pendingImagePickerDataUrl = evt.target.result;
+                document.getElementById('imagePickerPreviewContainer').classList.remove('hidden');
+                document.getElementById('imagePickerPreviewImg').src = pendingImagePickerDataUrl;
+                document.getElementById('imagePickerBoxLabel').textContent = `Loaded: ${file.name}`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleImagePickerSave(e) {
+            e.preventDefault();
+            const sourceType = document.querySelector('input[name="imagePickerSourceType"]:checked').value;
+            let finalUrl = '';
+
+            if (sourceType === 'computer') {
+                if (!pendingImagePickerDataUrl) {
+                    showToast('Please select an image from your computer', 'xmark');
+                    return;
+                }
+                finalUrl = pendingImagePickerDataUrl;
+            } else {
+                const rawUrl = document.getElementById('imagePickerUrlInput').value.trim();
+                if (!rawUrl) {
+                    showToast('Please enter a Google Drive or image URL', 'xmark');
+                    return;
+                }
+                finalUrl = processEmbedUrl(rawUrl, 'photo');
             }
+
+            if (activeImagePickerTarget && typeof activeImagePickerTarget.onSave === 'function') {
+                activeImagePickerTarget.onSave(finalUrl);
+            }
+            closeModal('imagePickerModal');
+            showToast('Image Updated!', 'image');
         }
 
         function addNewProgram() {
@@ -1753,39 +1961,131 @@
             renderPricing();
         }
 
-        function addNewTeacher() {
-            const name = prompt('Teacher Name:', 'New Laoshi');
-            if (!name) return;
-            const badge = prompt('Role Badge:', 'Mandarin Specialist');
-            const bio = prompt('Teacher Bio:', 'Experienced Mandarin instructor...');
-            const image = prompt('Image URL:', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=600');
+        // ============================================================
+        // Teacher Profile Modal — add / edit a teacher's name, badge,
+        // subtitle, and bio, with a photo that can be uploaded from the
+        // computer or pasted as a Google Drive / direct image URL.
+        // ============================================================
+        let pendingTeacherPhotoDataUrl = '';
 
-            const newTeacher = {
-                id: 't_' + Date.now(),
-                badge: badge || 'Teacher',
-                name: name,
-                sub: 'Certified Instructor',
-                bio: bio || '',
-                image: image || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=600'
-            };
+        function openTeacherModal(editId = null) {
+            document.getElementById('teacherEditId').value = editId || '';
+            document.getElementById('teacherModalTitle').textContent = editId ? 'Edit Teacher' : 'Add Teacher';
+            pendingTeacherPhotoDataUrl = '';
+            document.getElementById('teacherPhotoPreviewContainer').classList.add('hidden');
+            document.getElementById('teacherPhotoBoxLabel').textContent = 'Click to browse or drag a photo here';
+            document.getElementById('teacherPhotoUrlInput').value = '';
+            document.getElementById('teacherPhotoFileInput').value = '';
 
-            siteData.teachers.push(newTeacher);
-            saveAdminChanges();
-            renderTeachers();
+            if (editId) {
+                const t = siteData.teachers.find(x => x.id === editId);
+                if (t) {
+                    document.getElementById('teacherNameInput').value = t.name || '';
+                    document.getElementById('teacherBadgeInput').value = t.badge || '';
+                    document.getElementById('teacherSubInput').value = t.sub || '';
+                    document.getElementById('teacherBioInput').value = t.bio || '';
+                    if (t.image && t.image.startsWith('data:')) {
+                        toggleTeacherPhotoSourceType('computer');
+                        pendingTeacherPhotoDataUrl = t.image;
+                    } else {
+                        toggleTeacherPhotoSourceType('url');
+                        document.getElementById('teacherPhotoUrlInput').value = t.image || '';
+                    }
+                    if (t.image) showTeacherPhotoPreview(t.image);
+                }
+            } else {
+                document.getElementById('teacherNameInput').value = '';
+                document.getElementById('teacherBadgeInput').value = '';
+                document.getElementById('teacherSubInput').value = 'Certified Instructor';
+                document.getElementById('teacherBioInput').value = '';
+                toggleTeacherPhotoSourceType('computer');
+            }
+
+            openModal('teacherModal');
         }
 
-        function editTeacherItem(id) {
-            const t = siteData.teachers.find(item => item.id === id);
-            if (!t) return;
-            t.name = prompt('Teacher Name:', t.name) || t.name;
-            t.badge = prompt('Role Badge:', t.badge) || t.badge;
-            t.bio = prompt('Bio:', t.bio) || t.bio;
-            t.image = prompt('Image URL:', t.image) || t.image;
-            saveAdminChanges();
+        function toggleTeacherPhotoSourceType(source) {
+            const radios = document.getElementsByName('teacherPhotoSourceType');
+            radios.forEach(r => r.checked = (r.value === source));
+            document.getElementById('teacherPhotoComputerBox').classList.toggle('hidden', source !== 'computer');
+            document.getElementById('teacherPhotoUrlInput').classList.toggle('hidden', source !== 'url');
+        }
+
+        function handleTeacherPhotoFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                pendingTeacherPhotoDataUrl = evt.target.result;
+                showTeacherPhotoPreview(pendingTeacherPhotoDataUrl);
+                document.getElementById('teacherPhotoBoxLabel').textContent = `Loaded: ${file.name}`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showTeacherPhotoPreview(url) {
+            document.getElementById('teacherPhotoPreviewContainer').classList.remove('hidden');
+            document.getElementById('teacherPhotoPreviewImg').src = url;
+        }
+
+        async function handleTeacherSave(e) {
+            e.preventDefault();
+            const editId = document.getElementById('teacherEditId').value;
+            const name = document.getElementById('teacherNameInput').value.trim();
+            const badge = document.getElementById('teacherBadgeInput').value.trim();
+            const sub = document.getElementById('teacherSubInput').value.trim();
+            const bio = document.getElementById('teacherBioInput').value.trim();
+            const sourceType = document.querySelector('input[name="teacherPhotoSourceType"]:checked').value;
+
+            let image = '';
+            if (sourceType === 'computer') {
+                if (pendingTeacherPhotoDataUrl) {
+                    image = pendingTeacherPhotoDataUrl;
+                } else if (editId) {
+                    const existing = siteData.teachers.find(x => x.id === editId);
+                    image = existing ? existing.image : '';
+                }
+                if (!image) {
+                    showToast('Please select a photo from your computer', 'xmark');
+                    return;
+                }
+            } else {
+                const rawUrl = document.getElementById('teacherPhotoUrlInput').value.trim();
+                if (!rawUrl) {
+                    showToast('Please enter a Google Drive or image URL', 'xmark');
+                    return;
+                }
+                image = processEmbedUrl(rawUrl, 'photo');
+            }
+
+            if (editId) {
+                const t = siteData.teachers.find(x => x.id === editId);
+                if (t) {
+                    t.name = name;
+                    t.badge = badge;
+                    t.sub = sub;
+                    t.bio = bio;
+                    t.image = image;
+                }
+            } else {
+                siteData.teachers.push({
+                    id: 't_' + Date.now(),
+                    badge: badge || 'Teacher',
+                    name: name || 'New Laoshi',
+                    sub: sub || 'Certified Instructor',
+                    bio: bio || '',
+                    image: image
+                });
+            }
+
+            await saveAdminChanges();
             renderTeachers();
+            closeModal('teacherModal');
+            showToast(editId ? 'Teacher Updated!' : 'New Teacher Added!', 'user-check');
         }
 
         function deleteTeacherItem(id) {
+            if (!confirm('Remove this teacher profile? This cannot be undone.')) return;
             siteData.teachers = siteData.teachers.filter(t => t.id !== id);
             saveAdminChanges();
             renderTeachers();
