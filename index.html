@@ -1320,6 +1320,115 @@
         let activeMediaType = 'photo';
         let pendingMediaDataUrl = '';
 
+        // ============================================================
+        // Media Compression — every image uploaded from the admin's own
+        // computer (gallery photos, teacher photos, eBook covers, logo/
+        // hero/about images) gets resized and re-encoded on a <canvas>
+        // — to WebP where the browser supports it, JPEG otherwise —
+        // before it's turned into the data: URL that gets written into
+        // the site_content JSONB row in Supabase. Without this, one
+        // unedited phone photo (4-8MB) bloats that row fast; this keeps
+        // each image down to a few hundred KB while looking the same on
+        // the live site. If the "compressed" result would end up bigger
+        // than the original (can happen with a tiny, already-optimized
+        // image), the original is kept instead.
+        //
+        // Video is NOT re-encoded here — the browser has no cheap way to
+        // shrink video client-side. Large video uploads instead get a
+        // nudge toward the existing Google Drive / YouTube link option,
+        // which stores just a URL rather than the whole file.
+        // ============================================================
+        const IMAGE_COMPRESSION_PRESETS = {
+            gallery: { maxDimension: 1920, quality: 0.78 },
+            teacherPhoto: { maxDimension: 1000, quality: 0.82 },
+            ebookCover: { maxDimension: 900, quality: 0.82 },
+            logo: { maxDimension: 600, quality: 0.9 },
+            hero: { maxDimension: 1920, quality: 0.78 },
+            about: { maxDimension: 1400, quality: 0.8 },
+            default: { maxDimension: 1600, quality: 0.8 }
+        };
+        const LARGE_VIDEO_WARNING_BYTES = 15 * 1024 * 1024; // 15MB
+
+        function approxDataUrlBytes(dataUrl) {
+            const commaIdx = dataUrl.indexOf(',');
+            const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+            const padding = base64.endsWith('==') ? 2 : (base64.endsWith('=') ? 1 : 0);
+            return Math.max(0, Math.round((base64.length * 3) / 4) - padding);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function canvasSupportsWebp(canvas) {
+            try {
+                return canvas.toDataURL('image/webp').startsWith('data:image/webp');
+            } catch (err) {
+                return false;
+            }
+        }
+
+        // Reads, downsizes, and re-encodes an image File. Resolves with
+        // { dataUrl, originalBytes, compressedBytes, skipped }. Never
+        // rejects — on any failure it resolves with the untouched
+        // original so an upload can never be blocked by this step.
+        function compressImageFile(file, presetName = 'default') {
+            const preset = IMAGE_COMPRESSION_PRESETS[presetName] || IMAGE_COMPRESSION_PRESETS.default;
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onerror = () => resolve({ dataUrl: null, originalBytes: file.size, compressedBytes: file.size, skipped: true, error: true });
+                reader.onload = (evt) => {
+                    const originalDataUrl = evt.target.result;
+                    const img = new Image();
+                    img.onerror = () => resolve({ dataUrl: originalDataUrl, originalBytes: file.size, compressedBytes: file.size, skipped: true });
+                    img.onload = () => {
+                        try {
+                            let { width, height } = img;
+                            if (width > preset.maxDimension || height > preset.maxDimension) {
+                                if (width >= height) {
+                                    height = Math.round(height * (preset.maxDimension / width));
+                                    width = preset.maxDimension;
+                                } else {
+                                    width = Math.round(width * (preset.maxDimension / height));
+                                    height = preset.maxDimension;
+                                }
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+
+                            const mime = canvasSupportsWebp(canvas) ? 'image/webp' : 'image/jpeg';
+                            const outUrl = canvas.toDataURL(mime, preset.quality);
+                            const originalBytes = file.size;
+                            const compressedBytes = approxDataUrlBytes(outUrl);
+
+                            if (compressedBytes >= originalBytes) {
+                                resolve({ dataUrl: originalDataUrl, originalBytes, compressedBytes: originalBytes, skipped: true });
+                            } else {
+                                resolve({ dataUrl: outUrl, originalBytes, compressedBytes, skipped: false });
+                            }
+                        } catch (err) {
+                            console.error('Image compression failed, using original:', err);
+                            resolve({ dataUrl: originalDataUrl, originalBytes: file.size, compressedBytes: file.size, skipped: true });
+                        }
+                    };
+                    img.src = originalDataUrl;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function loadedLabelText(file, result) {
+            if (result.error) return `Loaded: ${file.name}`;
+            return result.skipped
+                ? `Loaded: ${file.name} (${formatBytes(result.originalBytes)})`
+                : `Loaded: ${file.name} — compressed ${formatBytes(result.originalBytes)} → ${formatBytes(result.compressedBytes)}`;
+        }
+
         window.onload = async function() {
             document.getElementById('year').textContent = new Date().getFullYear();
 
@@ -1813,19 +1922,32 @@
             }
         }
 
-        function handleFileSelect(e) {
+        async function handleFileSelect(e) {
             const file = e.target.files[0];
             if (!file) return;
+            const isVideoFile = file.type.startsWith('video/');
 
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                pendingMediaDataUrl = evt.target.result;
-                const isVideoFile = file.type.startsWith('video/');
-                setMediaType(isVideoFile ? 'video' : 'photo');
-                showPreview(pendingMediaDataUrl, isVideoFile ? 'video' : 'photo');
-                document.getElementById('uploadBoxLabel').textContent = `Loaded: ${file.name}`;
-            };
-            reader.readAsDataURL(file);
+            if (isVideoFile) {
+                setMediaType('video');
+                if (file.size > LARGE_VIDEO_WARNING_BYTES) {
+                    showToast(`That video is ${formatBytes(file.size)} — the Google Drive / YouTube link option keeps storage much lighter`, 'triangle-exclamation');
+                }
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    pendingMediaDataUrl = evt.target.result;
+                    showPreview(pendingMediaDataUrl, 'video');
+                    document.getElementById('uploadBoxLabel').textContent = `Loaded: ${file.name} (${formatBytes(file.size)})`;
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+
+            setMediaType('photo');
+            document.getElementById('uploadBoxLabel').textContent = `Compressing ${file.name}…`;
+            const result = await compressImageFile(file, 'gallery');
+            pendingMediaDataUrl = result.dataUrl;
+            showPreview(pendingMediaDataUrl, 'photo');
+            document.getElementById('uploadBoxLabel').textContent = loadedLabelText(file, result);
         }
 
         function showPreview(url, type) {
@@ -2054,6 +2176,7 @@
         function openLogoImagePicker() {
             openImagePicker({
                 title: 'Site Logo Image',
+                presetName: 'logo',
                 onSave: (url) => {
                     siteData.logoImage = url;
                     document.getElementById('siteLogoImage').src = url;
@@ -2066,6 +2189,7 @@
         function openHeroImagePicker() {
             openImagePicker({
                 title: 'Hero Card Image',
+                presetName: 'hero',
                 onSave: (url) => {
                     siteData.heroImage = url;
                     document.getElementById('heroImage').src = url;
@@ -2077,6 +2201,7 @@
         function openAboutImagePicker() {
             openImagePicker({
                 title: 'About Section Image',
+                presetName: 'about',
                 onSave: (url) => {
                     siteData.aboutImage = url;
                     document.getElementById('aboutImage').src = url;
@@ -2092,17 +2217,16 @@
             document.getElementById('imagePickerUrlBox').classList.toggle('hidden', source !== 'url');
         }
 
-        function handleImagePickerFileSelect(e) {
+        async function handleImagePickerFileSelect(e) {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                pendingImagePickerDataUrl = evt.target.result;
-                document.getElementById('imagePickerPreviewContainer').classList.remove('hidden');
-                document.getElementById('imagePickerPreviewImg').src = pendingImagePickerDataUrl;
-                document.getElementById('imagePickerBoxLabel').textContent = `Loaded: ${file.name}`;
-            };
-            reader.readAsDataURL(file);
+            const presetName = (activeImagePickerTarget && activeImagePickerTarget.presetName) || 'default';
+            document.getElementById('imagePickerBoxLabel').textContent = `Compressing ${file.name}…`;
+            const result = await compressImageFile(file, presetName);
+            pendingImagePickerDataUrl = result.dataUrl;
+            document.getElementById('imagePickerPreviewContainer').classList.remove('hidden');
+            document.getElementById('imagePickerPreviewImg').src = pendingImagePickerDataUrl;
+            document.getElementById('imagePickerBoxLabel').textContent = loadedLabelText(file, result);
         }
 
         function handleImagePickerSave(e) {
@@ -2310,16 +2434,14 @@
             document.getElementById('teacherPhotoUrlInput').classList.toggle('hidden', source !== 'url');
         }
 
-        function handleTeacherPhotoFileSelect(e) {
+        async function handleTeacherPhotoFileSelect(e) {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                pendingTeacherPhotoDataUrl = evt.target.result;
-                showTeacherPhotoPreview(pendingTeacherPhotoDataUrl);
-                document.getElementById('teacherPhotoBoxLabel').textContent = `Loaded: ${file.name}`;
-            };
-            reader.readAsDataURL(file);
+            document.getElementById('teacherPhotoBoxLabel').textContent = `Compressing ${file.name}…`;
+            const result = await compressImageFile(file, 'teacherPhoto');
+            pendingTeacherPhotoDataUrl = result.dataUrl;
+            showTeacherPhotoPreview(pendingTeacherPhotoDataUrl);
+            document.getElementById('teacherPhotoBoxLabel').textContent = loadedLabelText(file, result);
         }
 
         function showTeacherPhotoPreview(url) {
@@ -2444,16 +2566,14 @@
             document.getElementById('ebookCoverUrlInput').classList.toggle('hidden', source !== 'url');
         }
 
-        function handleEbookCoverFileSelect(e) {
+        async function handleEbookCoverFileSelect(e) {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                pendingEbookCoverDataUrl = evt.target.result;
-                showEbookCoverPreview(pendingEbookCoverDataUrl);
-                document.getElementById('ebookCoverBoxLabel').textContent = `Loaded: ${file.name}`;
-            };
-            reader.readAsDataURL(file);
+            document.getElementById('ebookCoverBoxLabel').textContent = `Compressing ${file.name}…`;
+            const result = await compressImageFile(file, 'ebookCover');
+            pendingEbookCoverDataUrl = result.dataUrl;
+            showEbookCoverPreview(pendingEbookCoverDataUrl);
+            document.getElementById('ebookCoverBoxLabel').textContent = loadedLabelText(file, result);
         }
 
         function showEbookCoverPreview(url) {
